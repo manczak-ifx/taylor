@@ -1,4 +1,4 @@
-use manifest_generator::manifest::{SuitAuthentication, SuitDigest, SuitEnvelope};
+use manifest_generator::manifest::{SuitAuthentication, SuitAuthenticationBlock, SuitDigest, SuitEnvelope,COSEAuthBlockEnum};
 use manifest_generator::sign::sign;
 use manifest_generator::{
     encode::{encode_envelope, encode_manifest},
@@ -46,17 +46,19 @@ fn main() {
     let manifest = parse(&mut reader).unwrap();
 
     let manifest_cbor = encode_manifest(&manifest);
-
     // Handle Envelope
-
+    
     let digest = hex::encode(manifest_cbor).digest();
-
+    // TODO Insert authblock for test purpose Remove this soon as possible  
+    let mut remove_pls:Vec<SuitAuthenticationBlock> = Vec::new();
+    println!("digest string :: {:?}", digest);
+    remove_pls.push(SuitAuthenticationBlock { algorithm: COSEAuthBlockEnum::COSESign1Tagged });
     let suit_auth = SuitAuthentication {
         digest: SuitDigest {
             algorithm: "sha256".to_owned(),
             digest: digest,
         },
-        auth_blocks: Vec::new(),
+        auth_blocks: remove_pls,//Vec::new(),
     };
 
     let mut envelope = SuitEnvelope {

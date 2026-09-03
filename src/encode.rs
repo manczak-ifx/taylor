@@ -228,10 +228,36 @@ where
 
 // Encode manifest first to calculate digest for envelope
 
-pub fn encode_manifest(manifest: &SuitManifest) -> Vec<u8> {
-    let mut encoded = Vec::new();
+fn encode_cbor_bstr_header(len: usize) -> Vec<u8> {
+    match len {
+        0..=23 => vec![0x40 | (len as u8)],
+        24..=0xFF => vec![0x58, len as u8],
+        0x100..=0xFFFF => {
+            let mut header = vec![0x59];
+            header.extend_from_slice(&(len as u16).to_be_bytes());
+            header
+        }
+        0x1_0000..=0xFFFF_FFFF => {
+            let mut header = vec![0x5A];
+            header.extend_from_slice(&(len as u32).to_be_bytes());
+            header
+        }
+        _ => {
+            let mut header = vec![0x5B];
+            header.extend_from_slice(&(len as u64).to_be_bytes());
+            header
+        }
+    }
+}
 
-    into_writer(manifest, &mut encoded).unwrap();
+pub fn encode_manifest(manifest: &SuitManifest) -> Vec<u8> {
+    let mut manifest_bytes = Vec::new();
+
+    into_writer(manifest, &mut manifest_bytes).unwrap();
+    //let mut encoded = Vec::new();
+    let mut encoded = encode_cbor_bstr_header(manifest_bytes.len());
+    encoded.extend_from_slice(&manifest_bytes);
+
     return encoded;
 }
 
