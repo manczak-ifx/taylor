@@ -1,3 +1,6 @@
+//! CBOR encoding of a [`crate::manifest::SuitManifest`]/[`crate::manifest::SuitEnvelope`],
+//! via hand-written [`Serialize`] impls that map each field to its CDDL-mandated integer key.
+
 use crate::manifest::{
     SuitAuthentication, SuitCommand, SuitCommon, SuitDigest, SuitEnvelope, SuitManifest,
     SuitParameter,
@@ -327,6 +330,9 @@ fn encode_cbor_bstr_header(len: usize) -> Vec<u8> {
     }
 }
 
+/// Encodes `manifest` as a `bstr .cbor SUIT_Manifest`: its CBOR map, prefixed with a bstr
+/// length header. The digest embedded in the envelope's `SuitAuthentication` is computed
+/// over these exact bytes.
 pub fn encode_manifest(manifest: &SuitManifest) -> Vec<u8> {
     let mut manifest_bytes = Vec::new();
 
@@ -338,6 +344,7 @@ pub fn encode_manifest(manifest: &SuitManifest) -> Vec<u8> {
     return encoded;
 }
 
+/// Encodes `envelope` as a tag-107 `SUIT_Envelope` (per the IANA CBOR tag registry).
 pub fn encode_envelope(envelope: &SuitEnvelope) -> Vec<u8> {
     let mut encoded = Vec::new();
 

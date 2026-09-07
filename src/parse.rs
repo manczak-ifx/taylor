@@ -1,3 +1,6 @@
+//! Parses a JSON manifest description (see [the repo README](https://github.com/schnitzm/taylor#usage)
+//! for the expected shape) into a [`crate::manifest::SuitManifest`].
+
 use std::{fs::File, io::BufReader};
 
 use serde_bytes::ByteBuf;
@@ -255,6 +258,13 @@ fn parse_suit_command_sequence(
 }
 
 
+/// Reads a JSON manifest description from `reader` and builds a [`SuitManifest`].
+///
+/// # Panics
+///
+/// Panics (rather than returning `Err`) on several classes of malformed input; only a subset
+/// of validation currently returns [`Error`]. Treat this as a CLI-oriented parser, not a
+/// hardened one.
 pub fn parse(reader: &mut BufReader<File>) -> Result<SuitManifest, Error> {
     let data: Value = from_reader(reader).expect("JSON-Daten konnten nicht verarbeitet werden");
 
