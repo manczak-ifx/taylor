@@ -5,7 +5,7 @@ use crate::manifest::{
 use ciborium::ser::into_writer;
 use serde::{
     Serialize,
-    ser::{self, SerializeMap, SerializeTuple},
+    ser::{self, SerializeMap, SerializeSeq, SerializeTuple},
 };
 use serde_bytes::ByteBuf;
 
@@ -54,19 +54,19 @@ impl Serialize for SuitManifest {
         for value in &self.sequence {
             match value.sequence {
                 crate::manifest::SuitCommandSequenceEnum::SuitInstall => {
-                    m.serialize_entry(&20u8, &encode_to_cbor(&value.actions))?;
+                    m.serialize_entry(&20u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitPayloadFetch => {
-                    m.serialize_entry(&16u8, &encode_to_cbor(&value.actions))?;
+                    m.serialize_entry(&16u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitValidate => {
-                    m.serialize_entry(&7u8, &encode_to_cbor(&value.actions))?;
+                    m.serialize_entry(&7u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitLoad => {
-                    m.serialize_entry(&8u8, &encode_to_cbor(&value.actions))?;
+                    m.serialize_entry(&8u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitInvoke => {
-                    m.serialize_entry(&9u8, &encode_to_cbor(&value.actions))?;
+                    m.serialize_entry(&9u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
                 }
             }
         }
@@ -80,8 +80,9 @@ impl Serialize for SuitCommon {
         S: serde::Serializer,
     {
         let mut m = serializer.serialize_map(Some(2))?;
-        m.serialize_entry(&2u8, &encode_to_cbor(&self.components))?;
-        m.serialize_entry(&4u8, &encode_to_cbor(&self.shared_sequence))?;
+        // suit-components is a direct array (not bstr-wrapped); only shared-sequence is wrapped
+        m.serialize_entry(&2u8, &self.components)?;
+        m.serialize_entry(&4u8, &encode_to_cbor(&FlatSequence(&self.shared_sequence)))?;
         m.end()
     }
 }
@@ -98,119 +99,195 @@ impl Serialize for SuitDigest {
             }
             _ => {}
         }
-        s.serialize_element(&encode_to_cbor(&self.digest))?;
+        s.serialize_element(&ByteBuf::from(self.digest.clone()))?;
         s.end()
     }
 }
 
-impl Serialize for SuitParameter {
+impl SuitParameter {
+    /// Writes this parameter's key+value as one entry into a caller-supplied map, so multiple
+    /// parameters can be merged into a single `{+ $$SUIT_Parameters}` map.
+    fn write_entry<M>(&self, map: &mut M) -> Result<(), M::Error>
+    where
+        M: SerializeMap,
+    {
+        match &self.ident {
+            crate::manifest::SuitParametersEnum::SuitVendorID(bytes) => {
+                map.serialize_entry(&1u8, &ByteBuf::from(bytes.clone()))?;
+            }
+            crate::manifest::SuitParametersEnum::SuitClassID(bytes) => {
+                map.serialize_entry(&2u8, &ByteBuf::from(bytes.clone()))?;
+            }
+            crate::manifest::SuitParametersEnum::SuitImageDigest(digest) => {
+                map.serialize_entry(&3u8, &encode_to_cbor(digest))?;
+            }
+            crate::manifest::SuitParametersEnum::SuitComponentSlot(v) => {
+                map.serialize_entry(&5u8, v)?;
+            }
+            crate::manifest::SuitParametersEnum::SuitStrictOrder(v) => {
+                map.serialize_entry(&12u8, v)?;
+            }
+            crate::manifest::SuitParametersEnum::SuitSoftFailure(v) => {
+                map.serialize_entry(&13u8, v)?;
+            }
+            crate::manifest::SuitParametersEnum::SuitImageSize(v) => {
+                map.serialize_entry(&14u8, v)?;
+            }
+            crate::manifest::SuitParametersEnum::SuitContent(bytes) => {
+                map.serialize_entry(&18u8, &ByteBuf::from(bytes.clone()))?;
+            }
+            crate::manifest::SuitParametersEnum::SuitURI(v) => {
+                map.serialize_entry(&21u8, v)?;
+            }
+            crate::manifest::SuitParametersEnum::SuitSourceComponent(v) => {
+                map.serialize_entry(&22u8, v)?;
+            }
+            crate::manifest::SuitParametersEnum::SuitInvokeArgs(bytes) => {
+                map.serialize_entry(&23u8, &ByteBuf::from(bytes.clone()))?;
+            }
+            crate::manifest::SuitParametersEnum::SuitDeviceID(bytes) => {
+                map.serialize_entry(&24u8, &ByteBuf::from(bytes.clone()))?;
+            }
+            crate::manifest::SuitParametersEnum::SuitFetchArguments(bytes) => {
+                map.serialize_entry(&25u8, &ByteBuf::from(bytes.clone()))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A whole `Vec<SuitParameter>` merged into ONE CBOR map, per `{+ $$SUIT_Parameters}`.
+struct MergedParams<'a>(&'a [SuitParameter]);
+
+impl<'a> Serialize for MergedParams<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let mut m = serializer.serialize_map(Some(1))?;
-        match &self.ident {
-            crate::manifest::SuitParametersEnum::SuitVendorID(str) => {
-                m.serialize_entry(&1u8, &encode_to_cbor(str))?;
-            }
-            crate::manifest::SuitParametersEnum::SuitClassID(str) => {
-                m.serialize_entry(&2u8, &encode_to_cbor(str))?;
-            }
-            crate::manifest::SuitParametersEnum::SuitImageDigest(str) => {
-                m.serialize_entry(&3u8, &encode_to_cbor(str))?;
-            }
-            crate::manifest::SuitParametersEnum::SuitComponentSlot(str) => {
-                m.serialize_entry(&5u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitStrictOrder(str) => {
-                m.serialize_entry(&12u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitSoftFailure(str) => {
-                m.serialize_entry(&13u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitImageSize(str) => {
-                m.serialize_entry(&14u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitContent(str) => {
-                m.serialize_entry(&18u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitURI(str) => {
-                m.serialize_entry(&21u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitSourceComponent(str) => {
-                m.serialize_entry(&22u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitInvokeArgs(str) => {
-                m.serialize_entry(&23u8, str)?;
-            }
-            crate::manifest::SuitParametersEnum::SuitDeviceID(str) => {
-                m.serialize_entry(&24u8, str)?;
-            }
+        let mut m = serializer.serialize_map(Some(self.0.len()))?;
+        for param in self.0 {
+            param.write_entry(&mut m)?;
         }
         m.end()
     }
 }
 
-impl Serialize for SuitCommand {
+/// A command sequence as the flat array CDDL requires: alternating (code, argument) pairs,
+/// instead of an array of per-command maps.
+struct FlatSequence<'a>(&'a [SuitCommand]);
+
+impl<'a> Serialize for FlatSequence<'a> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        let mut m = serializer.serialize_map(Some(1))?;
+        let mut seq = serializer.serialize_seq(Some(self.0.len() * 2))?;
+        for cmd in self.0 {
+            cmd.serialize_pair(&mut seq)?;
+        }
+        seq.end()
+    }
+}
+
+/// `[2* bstr .cbor SUIT_Command_Sequence, ?nil]` - try-each's branch list plus optional fallback.
+struct TryEachArg<'a>(&'a [Vec<SuitCommand>], bool);
+
+impl<'a> Serialize for TryEachArg<'a> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let extra = if self.1 { 1 } else { 0 };
+        let mut seq = serializer.serialize_seq(Some(self.0.len() + extra))?;
+        for branch in self.0 {
+            seq.serialize_element(&encode_to_cbor(&FlatSequence(branch)))?;
+        }
+        if self.1 {
+            seq.serialize_element(&())?;
+        }
+        seq.end()
+    }
+}
+
+impl SuitCommand {
+    /// Serializes this command as a (code, argument) pair into a flat sequence array.
+    fn serialize_pair<S>(&self, seq: &mut S) -> Result<(), S::Error>
+    where
+        S: SerializeSeq,
+    {
+        use crate::manifest::SuitCommandEnum::*;
         match &self.ident {
-            crate::manifest::SuitCommandEnum::SuitConditionVendorIdentifier => {
-                m.serialize_entry(&1u8, &self.value)?;
+            SuitConditionVendorIdentifier(v) => {
+                seq.serialize_element(&1u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitConditionClassIdentifier => {
-                m.serialize_entry(&2u8, &self.value)?;
+            SuitConditionClassIdentifier(v) => {
+                seq.serialize_element(&2u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitConditionDeviceIdentifier => {
-                m.serialize_entry(&24u8, &self.value)?;
+            SuitConditionDeviceIdentifier(v) => {
+                seq.serialize_element(&24u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitConditionImageMatch => {
-                m.serialize_entry(&3u8, &self.value)?;
+            SuitConditionImageMatch(v) => {
+                seq.serialize_element(&3u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitConditionCheckContent => {
-                m.serialize_entry(&6u8, &self.value)?;
+            SuitConditionCheckContent(v) => {
+                seq.serialize_element(&6u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitConditionComponentSlot => {
-                m.serialize_entry(&5u8, &self.value)?;
+            SuitConditionComponentSlot(v) => {
+                seq.serialize_element(&5u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitConditionAbort => {
-                m.serialize_entry(&14u8, &self.value)?;
+            SuitConditionAbort(v) => {
+                seq.serialize_element(&14u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveSetComponentIndex => {
-                m.serialize_entry(&12u8, &self.value)?;
+            SuitDirectiveSetComponentIndex(v) => {
+                seq.serialize_element(&12u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveTryEach => {
-                m.serialize_entry(&15u8, &self.value)?;
+            SuitDirectiveTryEach(branches, else_nil) => {
+                seq.serialize_element(&15u8)?;
+                seq.serialize_element(&TryEachArg(branches, *else_nil))?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveOverrideParameters(str) => {
-                m.serialize_entry(&20u8, &encode_to_cbor(str))?;
+            SuitDirectiveOverrideParameters(params) => {
+                seq.serialize_element(&20u8)?;
+                seq.serialize_element(&MergedParams(params))?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveFetch => {
-                m.serialize_entry(&21u8, &self.value)?;
+            SuitDirectiveFetch(v) => {
+                seq.serialize_element(&21u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveCopy => {
-                m.serialize_entry(&22u8, &self.value)?;
+            SuitDirectiveCopy(v) => {
+                seq.serialize_element(&22u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveWrite => {
-                m.serialize_entry(&18u8, &self.value)?;
+            SuitDirectiveWrite(v) => {
+                seq.serialize_element(&18u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveInvoke => {
-                m.serialize_entry(&23u8, &self.value)?;
+            SuitDirectiveInvoke(v) => {
+                seq.serialize_element(&23u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveRunSequence => {
-                m.serialize_entry(&32u8, &self.value)?;
+            SuitDirectiveRunSequence(nested) => {
+                seq.serialize_element(&32u8)?;
+                seq.serialize_element(&encode_to_cbor(&FlatSequence(nested)))?;
             }
-            crate::manifest::SuitCommandEnum::SuitDirectiveSwap => {
-                m.serialize_entry(&31u8, &self.value)?;
+            SuitDirectiveSwap(v) => {
+                seq.serialize_element(&31u8)?;
+                seq.serialize_element(v)?;
             }
-            crate::manifest::SuitCommandEnum::SuitCommandCustom => {
-                m.serialize_entry(&9u8, &self.value)?;
+            // Not spec-conformant (see manifest.rs) - kept minimal/out of scope.
+            SuitCommandCustom(v) => {
+                seq.serialize_element(&9u8)?;
+                seq.serialize_element(v)?;
             }
         }
-        m.end()
+        Ok(())
     }
 }
 
