@@ -78,19 +78,19 @@ fn main() {
     let suit_auth = SuitAuthentication {
         digest: SuitDigest {
             algorithm: "sha256".to_owned(),
-            digest: digest,
+            digest,
         },
         auth_blocks: Vec::new(),
     };
 
     let mut envelope = SuitEnvelope {
         auth_block: suit_auth,
-        manifest: manifest,
+        manifest,
     };
 
     // Yet to be implemented
     if should_sign {
-        envelope = sign(envelope, &key_path);
+        envelope = sign(envelope, key_path);
     }
 
     let envelope_cbor = encode_envelope(&envelope);
