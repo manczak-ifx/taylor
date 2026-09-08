@@ -32,7 +32,7 @@ impl Serialize for SuitAuthentication {
     where
         S: ser::Serializer,
     {
-        if self.auth_blocks.len() > 0 {
+        if !self.auth_blocks.is_empty() {
             let mut s = serializer.serialize_tuple(2)?;
             s.serialize_element(&encode_to_cbor(&self.digest))?;
             s.serialize_element(&encode_to_cbor(&self.auth_blocks))?;
@@ -57,19 +57,19 @@ impl Serialize for SuitManifest {
         for value in &self.sequence {
             match value.sequence {
                 crate::manifest::SuitCommandSequenceEnum::SuitInstall => {
-                    m.serialize_entry(&20u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
+                    m.serialize_entry(&20u8, &encode_to_cbor(FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitPayloadFetch => {
-                    m.serialize_entry(&16u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
+                    m.serialize_entry(&16u8, &encode_to_cbor(FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitValidate => {
-                    m.serialize_entry(&7u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
+                    m.serialize_entry(&7u8, &encode_to_cbor(FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitLoad => {
-                    m.serialize_entry(&8u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
+                    m.serialize_entry(&8u8, &encode_to_cbor(FlatSequence(&value.actions)))?;
                 }
                 crate::manifest::SuitCommandSequenceEnum::SuitInvoke => {
-                    m.serialize_entry(&9u8, &encode_to_cbor(&FlatSequence(&value.actions)))?;
+                    m.serialize_entry(&9u8, &encode_to_cbor(FlatSequence(&value.actions)))?;
                 }
             }
         }
@@ -85,7 +85,7 @@ impl Serialize for SuitCommon {
         let mut m = serializer.serialize_map(Some(2))?;
         // suit-components is a direct array (not bstr-wrapped); only shared-sequence is wrapped
         m.serialize_entry(&2u8, &self.components)?;
-        m.serialize_entry(&4u8, &encode_to_cbor(&FlatSequence(&self.shared_sequence)))?;
+        m.serialize_entry(&4u8, &encode_to_cbor(FlatSequence(&self.shared_sequence)))?;
         m.end()
     }
 }
@@ -95,13 +95,17 @@ impl Serialize for SuitDigest {
     where
         S: serde::Serializer,
     {
-        let mut s = serializer.serialize_tuple(2)?;
-        match self.algorithm.as_ref() {
-            "sha256" => {
-                s.serialize_element(&-16i8)?;
+        // suit-digest-algorithm-id is REQUIRED; per suit-manifest.cddl cose-alg-* values.
+        let alg_id: i8 = match self.algorithm.as_ref() {
+            "sha256" => -16,
+            "sha384" => -43,
+            "sha512" => -44,
+            _ => {
+                return Err(ser::Error::custom("unsupported digest algorithm"));
             }
-            _ => {}
-        }
+        };
+        let mut s = serializer.serialize_tuple(2)?;
+        s.serialize_element(&alg_id)?;
         s.serialize_element(&ByteBuf::from(self.digest.clone()))?;
         s.end()
     }
@@ -203,7 +207,7 @@ impl<'a> Serialize for TryEachArg<'a> {
         let extra = if self.1 { 1 } else { 0 };
         let mut seq = serializer.serialize_seq(Some(self.0.len() + extra))?;
         for branch in self.0 {
-            seq.serialize_element(&encode_to_cbor(&FlatSequence(branch)))?;
+            seq.serialize_element(&encode_to_cbor(FlatSequence(branch)))?;
         }
         if self.1 {
             seq.serialize_element(&())?;
@@ -278,7 +282,7 @@ impl SuitCommand {
             }
             SuitDirectiveRunSequence(nested) => {
                 seq.serialize_element(&32u8)?;
-                seq.serialize_element(&encode_to_cbor(&FlatSequence(nested)))?;
+                seq.serialize_element(&encode_to_cbor(FlatSequence(nested)))?;
             }
             SuitDirectiveSwap(v) => {
                 seq.serialize_element(&31u8)?;
@@ -341,7 +345,7 @@ pub fn encode_manifest(manifest: &SuitManifest) -> Vec<u8> {
     let mut encoded = encode_cbor_bstr_header(manifest_bytes.len());
     encoded.extend_from_slice(&manifest_bytes);
 
-    return encoded;
+    encoded
 }
 
 /// Encodes `envelope` as a tag-107 `SUIT_Envelope` (per the IANA CBOR tag registry).
@@ -351,5 +355,5 @@ pub fn encode_envelope(envelope: &SuitEnvelope) -> Vec<u8> {
     // Tag envelope with 107 according to IANA
     encoded.extend_from_slice(&[0xD8, 0x6B]);
     into_writer(envelope, &mut encoded).unwrap();
-    return encoded;
+    encoded
 }

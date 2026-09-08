@@ -39,23 +39,21 @@ fn parse_suit_parameters(parse_key: &str, parse_value: &Value) -> Option<SuitPar
         }),
         "image-digest" => Some(SuitParameter {
             ident: crate::manifest::SuitParametersEnum::SuitImageDigest({
-                let algorithm = match parse_value.get("algorithm") {
-                    Some(str) => String::try_from(str.as_str().unwrap())
-                        .map_err(|_| Error::UnsupportedParameter("Invalid algorithm".to_string()))
-                        .unwrap(),
-                    None => return None,
+                let algorithm = {
+                    let algo = parse_value.get("algorithm")?;
+                    algo.as_str().unwrap().to_string()
                 };
 
-                let digest = match parse_value.get("digest") {
-                    Some(str) => hex::decode(str.as_str().unwrap())
-                        .map_err(|_| Error::UnsupportedParameter("Invalid digest hex".to_string()))
-                        .unwrap(),
-                    None => return None,
+                let digest = {
+                    let str = parse_value.get("digest")?;
+                    hex::decode(str.as_str().unwrap())
+                .map_err(|_| Error::UnsupportedParameter("Invalid digest hex".to_string()))
+                .unwrap()
                 };
 
                 crate::manifest::SuitDigest {
-                    algorithm: algorithm,
-                    digest: digest,
+                    algorithm,
+                    digest,
                 }
             }),
         }),
@@ -290,12 +288,12 @@ pub fn parse(reader: &mut BufReader<File>) -> Result<SuitManifest, Error> {
 
     let suit_common = data
         .get("suit-common")
-        .ok_or_else(|| "No command sequence. Suit manifest needs a command sequence")
+        .ok_or("No command sequence. Suit manifest needs a command sequence")
         .unwrap();
 
     let components_value = suit_common
         .get("suit-components")
-        .ok_or_else(|| "No components. Suit manifest need at least one component".to_string())
+        .ok_or("No components. Suit manifest need at least one component")
         .unwrap();
 
     // Component identifiers are hex-encoded bstr segments, decoded generically (no special
@@ -329,7 +327,7 @@ pub fn parse(reader: &mut BufReader<File>) -> Result<SuitManifest, Error> {
     // Create suit common out of components & shared_sequence
 
     let suit_common = SuitCommon {
-        components: components,
+        components,
         shared_sequence: shared_seq_buf,
     };
 
@@ -355,9 +353,9 @@ pub fn parse(reader: &mut BufReader<File>) -> Result<SuitManifest, Error> {
     }
 
     Ok(SuitManifest {
-        version: version,
-        sequence_number: sequence_number,
-        suit_common: suit_common,
+        version,
+        sequence_number,
+        suit_common,
         sequence: seq_buf,
     })
 }
