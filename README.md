@@ -13,7 +13,7 @@ only cargo run for default path "examples/test1.json"
 ## How to add fields
 
  - Add the structure into the manifest.rs file
- - Implement parsing in parse.rs, 
+ - Implement parsing in parse.rs,
    - start with adding to parse fn and if necessary add helper function
    - add to return value
  - Implement serde::Serialize Trait in encode.rs
@@ -52,4 +52,3 @@ Taylor is licensed under either of
 - MIT license ([LICENSE-MIT](./LICENSE-MIT) or https://opensource.org/licenses/MIT)
 
 at your option.
-

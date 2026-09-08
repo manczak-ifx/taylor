@@ -1,4 +1,4 @@
-SUIT_start = SUIT_Envelope_Tagged / SUIT_Manifest_Tagged / start
+SUIT_start = SUIT_Envelope_Tagged / SUIT_Manifest_Tagged
 SUIT_Envelope_Tagged = #6.107(SUIT_Envelope)
 SUIT_Envelope = {
   suit-authentication-wrapper => bstr .cbor SUIT_Authentication,
@@ -54,7 +54,7 @@ SUIT_Unseverable_Members = (
 )
 
 SUIT_Severable_Members_Choice = (
-  ? suit-payload-fetch => SUIT_Digest / 
+  ? suit-payload-fetch => SUIT_Digest /
       bstr .cbor SUIT_Command_Sequence,
   ? suit-install => SUIT_Digest / bstr .cbor SUIT_Command_Sequence,
   ? suit-text => SUIT_Digest / bstr .cbor SUIT_Text_Map,
