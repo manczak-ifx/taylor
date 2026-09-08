@@ -1,6 +1,6 @@
-use manifest_generator::manifest::{SuitAuthentication, SuitDigest, SuitEnvelope};
-use manifest_generator::sign::sign;
-use manifest_generator::{
+use taylor::manifest::{SuitAuthentication, SuitDigest, SuitEnvelope};
+use taylor::sign::sign;
+use taylor::{
     encode::{encode_envelope, encode_manifest},
     parse::parse,
 };
@@ -55,7 +55,7 @@ fn main() {
     } else if positional.len() == 1 {
 
         json_path = Path::new(positional[0]);
-        println!("Using path: {json_path:?}");    
+        println!("Using path: {json_path:?}");
 
     } else {
         println!("Using default path: {json_path:?}");
@@ -109,4 +109,3 @@ fn main() {
         println!("Wrote CBOR output to: {out_path:?}");
     }
 }
-
