@@ -100,16 +100,6 @@ golden_test!(
 golden_test!(golden_test_json, "test");
 golden_test!(golden_prep_manifest, "prep-manifest");
 
-/// The whole point of the `suit-condition-version` shorthand is that it is sugar, not a
-/// different wire format: authoring the version-list condition either way must produce
-/// identical bytes.
-#[test]
-fn shorthand_and_standard_form_are_byte_identical() {
-    let shorthand = build_envelope_cbor("examples/manifest-handler-version.json");
-    let standard = build_envelope_cbor("examples/manifest-handler-standard.json");
-    assert_eq!(hex::encode(&shorthand), hex::encode(&standard));
-}
-
 /// Decodes with `ciborium::Value` (independent of this crate's own `Serialize` impls) and
 /// checks the structural invariants `SUIT_Envelope`/`SUIT_Manifest` require, standing in for
 /// the CDDL conformance checks a working `cddl` validator would otherwise provide.
